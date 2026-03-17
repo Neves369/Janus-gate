@@ -19,15 +19,6 @@
 | **Communication** | `socket` | Abstração de baixo nível para TCP/IP |
 | **Interface** | CLI / Bash | Interação direta com o shell remoto |
 
----
-
-## 🚀 Funcionalidades Atuais
-
-Atualmente, o projeto está em sua fase **MVP (Minimum Viable Product)**:
-
-* **TCP Listener:** Um servidor robusto em Python que aguarda conexões entrantes.
-* **Dual-Flow:** Capacidade de enviar comandos e receber o output em tempo real.
-* **Low Footprint:** Código limpo, utilizando apenas bibliotecas nativas do Python, facilitando a portabilidade.
 
 ---
 

@@ -1,1 +1,1 @@
-# Janus-trojan
+# Janus-gate

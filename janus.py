@@ -23,7 +23,7 @@ def listen(c):
             if data == "/exit":
                 return
             else
-                print(data)
+                cmd(c, data)
 
     except Exception as e:
         print(f'Listen function error: {e}')

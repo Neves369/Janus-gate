@@ -1,8 +1,9 @@
 # 🏛️ Janus' Gate
 
 <p align="center">
-  <img src="https://seu-link-da-imagem.com/janus_gate_banner.png" alt="Janus' Gate Banner" width="100%">
+  <img width="1408" height="768" alt="janus" src="https://github.com/user-attachments/assets/c64937c5-4db3-4774-8342-6c0565fc839d" />
 </p>
+
 
 ### *The threshold between classical infrastructure and digital persistence.*
 

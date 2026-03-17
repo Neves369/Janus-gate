@@ -7,5 +7,5 @@ c = socket.socket((socket.AF_NET, socket.SOCK_STREAM))
 C.connect((IP ,PORT))
 
 while True:
-    data = c.recv(1024)
+    data = c.recv(1024).decode().strip()
     print(data)

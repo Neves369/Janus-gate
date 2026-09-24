@@ -1,14 +1,3 @@
-# =============================================================================
-# connection.py — Servidor (atacante/operador)
-# -----------------------------------------------------------------------------
-# Visão geral: o C2 (Command & Control) fica na máquina do operador. Faz o
-# bind num socket, aceita conexões do cliente (janus.py) e abre um "terminal
-# interativo" por cliente, com:
-#   - menu de ajuda (/help)
-#   - leitura das respostas do cliente com timeout
-#   - captura automática de keylogs ([AUTO-SEND] -> salva em arquivo)
-#   - salvamento manual de dumps de /keylog dump
-# -----------------------------------------------------------------------------
 import os
 import sys
 import socket

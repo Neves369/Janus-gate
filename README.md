@@ -16,9 +16,10 @@
 | Componente | Tecnologia | Função |
 | :--- | :--- | :--- |
 | **Engine** | Python 3.x | Core da lógica de rede |
-| **Communication** | `socket` | Abstração de baixo nível para TCP/IP |
+| **Communication** | `socket`, `ssl`, `cryptography` | Canal TCP cifrado: TLS + Fernet (`SecureC2Channel`) |
 | **Keylogger** | `pynput` | Captura e buffer de teclas no alvo |
 | **Persistence** | `winreg`, `shutil` | Autostart via registro do Windows (chave Run) |
+| **Ofuscação de API** | `importlib` | Imports dinâmicos de módulos sensíveis (fora da tabela estática) |
 | **Interface** | Terminal interativo (`input()`) | Interação direta com o shell remoto |
 
 ---
@@ -81,6 +82,8 @@ C2_KEY=<chave Fernet em base64>
 
 > **Ofuscação (`encrypt/`):** os valores embutidos no `janus.py` (IP, porta, `PROGRAM_NAME`, chave de registro) estão em hex XOR gerado pela ferramenta `encrypt/`. Para customizar, gere o hex com ela e troque no código, usando a mesma `DECRYPT_KEY` no `.env`.
 
+> **Ofuscação de imports (`importlib`):** módulos com assinatura típica de malware (`winreg`, `shutil`, `socket`, `subprocess`, `pynput.keyboard`) não são importados no topo do `janus.py`; são carregados em runtime via `importlib.import_module("...")`, mantendo os nomes como strings fora da tabela de imports estáticos — o que reduz o sinal para analisadores estáticos e EDRs.
+
 Execute na máquina alvo:
 
 **Windows:**
@@ -92,6 +95,31 @@ python janus.py
 ```bash
 python3 janus.py
 ```
+
+---
+
+## 🏗️ Estrutura do Código
+
+### `janus.py` (trojan / agente)
+
+| Classe | Responsabilidade |
+| :--- | :--- |
+| `Config` | Caminho da aplicação, `.env` e parâmetros de runtime (IP, porta, `C2_KEY`, ...) |
+| `Crypto` | XOR byte a byte para encriptar/decriptar strings ofuscadas |
+| `FileTransfer` | Download/upload de arquivos em base64 |
+| `Keylogger` | Captura de teclas via `pynput` (buffer, start/stop/dump) |
+| `Persistence` | Cópia do binário para `%APPDATA%` + entrada de autostart no registro |
+| `Client` | Socket TCP + TLS, `SecureC2Channel` e dispatcher de comandos |
+| `SecureC2Channel` | Ofuscação do protocolo: cifra Fernet + framing por tamanho |
+
+### `connection.py` (centro de controle)
+
+| Classe | Responsabilidade |
+| :--- | :--- |
+| `UI` | Banner, menu de ajuda e limpeza de tela |
+| `KeylogStorage` | Grava os dumps de keylog em `keylog_dumps/` |
+| `Server` | Listener do C2 (bind/accept), envolve a conexão em TLS+Fernet e atende o cliente |
+| `SecureC2Channel` | Mesmo canal simétrico usado no agente |
 
 ---
 

